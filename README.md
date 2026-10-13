@@ -1,7 +1,7 @@
 # facet-ops-mcp — 谦面市场操作 MCP
 
 谦面（facet 线）的动作 MCP（五线 AI 操作面 C1 切片）：把 registry console API 的
-pack 操作面暴露给 AI agent——**浏览目录、读详情、发布、更新、上下架、发布前查重**。
+pack 操作面暴露给 AI agent——**浏览网关 AgentCard 目录、读详情、登记、更新、启停、登记前查重**（registry 网关面；facet pack 市场发布面 `/api/packs` 为 C1.1 挂账，需 facet 凭据 ref）。
 
 - 契约：`openspec/changes/facet-ops-mcp/specs/facet-ops-mcp/spec.md`（finddata 工作区）
 - 接入规约：`LINES-MCP-CONFORMANCE.md`（五线对齐清单）
@@ -19,11 +19,11 @@ registry 不可达 → 放行（工具层诚实报 unreachable）。
 | 工具 | registry 端点 | 写 |
 |---|---|---|
 | `facet_catalog_browse` | GET `/api/agents` | |
-| `facet_pack_read` | GET `/api/agents/{path}` | |
-| `facet_pack_publish` | POST `/api/agents/register` | ✅ |
-| `facet_pack_update` | PUT `/api/agents/{path}` | ✅ |
-| `facet_pack_toggle` | POST `/api/agents/{path}/toggle` | ✅ |
-| `facet_duplicate_check` | POST `/api/agents/check-duplicates`（恒 200） | |
+| `facet_agent_read` | GET `/api/agents/{path}` | |
+| `facet_agent_publish` | POST `/api/agents/register`（AgentCard 登记） | ✅ |
+| `facet_agent_update` | PUT `/api/agents/{path}` | ✅ |
+| `facet_agent_toggle` | POST `/api/agents/{path}/toggle` | ✅ |
+| `facet_agent_duplicate_check` | POST `/api/agents/check-duplicates`（恒 200） | |
 
 ## 环境
 

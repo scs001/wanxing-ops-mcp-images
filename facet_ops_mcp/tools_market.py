@@ -1,4 +1,7 @@
-"""六工具面（设计 D3）：facet_ 前缀、写操作显式、载荷薄转发。
+"""六工具面（设计 D3）：facet_agent_* 前缀、写操作显式、载荷薄转发。
+
+口径诚实：本面包的是 registry 网关的 AgentCard 面（/api/agents*，萬星 serving 卡+谦面目录）；
+facet pack 市场发布面（POST {market}/api/packs）是另一张面，需要 facet 凭据 ref（C1.1 挂账）。
 
 Bearer 从进站 MCP 请求取（get_http_headers，家族先例 fd-open-data-mcp scoping.py）；
 测试经 _current_bearer() 注入点 monkeypatch。
@@ -51,10 +54,10 @@ def register(mcp: FastMCP, client: RegistryClient) -> None:
         return await client.request("GET", "/api/agents", bearer=_current_bearer(), params=params)
 
     @mcp.tool
-    async def facet_pack_read(path: str, metadata_fields: list[str] | None = None) -> Any:
-        """读取 pack 详情（GET /api/agents/{path}）。
+    async def facet_agent_read(path: str, metadata_fields: list[str] | None = None) -> Any:
+        """读取网关 AgentCard 详情（GET /api/agents/{path}）。
 
-        path 为市场条目路径（如 packs/<packId> 或注册名）；metadata_fields 可选，
+        path 为网关条目路径（如注册名）；metadata_fields 可选，
         请求附加元数据字段（如 surface/marketplace）。404 如实报 not_found。
         """
         params = {"metadata_fields": metadata_fields} if metadata_fields else None
@@ -63,13 +66,13 @@ def register(mcp: FastMCP, client: RegistryClient) -> None:
         )
 
     @mcp.tool
-    async def facet_pack_publish(registration: dict[str, Any]) -> dict[str, Any]:
-        """发布/登记新 pack 到谦面市场（POST /api/agents/register）——写操作。
+    async def facet_agent_publish(registration: dict[str, Any]) -> dict[str, Any]:
+        """登记新 A2A AgentCard 进谦面网关目录（POST /api/agents/register）——写操作。
 
         registration 按 registry 契约薄转发：必填 name / url / supportedProtocol；
         常用可选：description、is_proxied（true=走网关路由，需配 proxy_target_url）、
         proxy_target_url、proxy_streaming。需要 registry 侧 publish_agent 权限（403
-        如实透传）。建议先 facet_duplicate_check 查重。
+        如实透传）。建议先 facet_agent_duplicate_check 查重。
         """
         result = await client.request(
             "POST", "/api/agents/register", bearer=_current_bearer(), json_body=registration
@@ -77,10 +80,10 @@ def register(mcp: FastMCP, client: RegistryClient) -> None:
         return {"published": True, "result": result}
 
     @mcp.tool
-    async def facet_pack_update(path: str, registration: dict[str, Any]) -> dict[str, Any]:
-        """更新已有 pack 定义/发新版本（PUT /api/agents/{path}）——写操作。
+    async def facet_agent_update(path: str, registration: dict[str, Any]) -> dict[str, Any]:
+        """更新已有 AgentCard 定义（PUT /api/agents/{path}）——写操作。
 
-        registration 与 facet_pack_publish 同形（registry AgentRegistrationRequest）；
+        registration 与 facet_agent_publish 同形（registry AgentRegistrationRequest）；
         仅条目属主/有权者可改（403 如实透传）。
         """
         result = await client.request(
@@ -89,10 +92,10 @@ def register(mcp: FastMCP, client: RegistryClient) -> None:
         return {"updated": True, "result": result}
 
     @mcp.tool
-    async def facet_pack_toggle(path: str, enabled: bool) -> dict[str, Any]:
-        """上/下架 pack（POST /api/agents/{path}/toggle）——显式写操作。
+    async def facet_agent_toggle(path: str, enabled: bool) -> dict[str, Any]:
+        """启用/停用网关条目（POST /api/agents/{path}/toggle）——显式写操作。
 
-        enabled=True 上架（对市场可见），False 下架（保留条目不删）。仅属主/有权者。
+        enabled=True 启用（生成路由），False 停用（条目保留路由摘除）。仅属主/有权者。
         """
         result = await client.request(
             "POST",
@@ -103,16 +106,16 @@ def register(mcp: FastMCP, client: RegistryClient) -> None:
         return {"toggled": True, "enabled": enabled, "result": result}
 
     @mcp.tool
-    async def facet_duplicate_check(
+    async def facet_agent_duplicate_check(
         name: str,
         description: str | None = None,
         url: str | None = None,
         self_path: str | None = None,
     ) -> Any:
-        """发布前咨询式查重（POST /api/agents/check-duplicates）——恒 200，不阻塞。
+        """登记前咨询式查重（POST /api/agents/check-duplicates）——恒 200，不阻塞。
 
         返回 collision_with（同 URL 精确命中）与 advisory_matches（相似命中）；
-        有匹配也可继续发布（advisory 语义）。self_path 用于排除自身。
+        有匹配也可继续登记（advisory 语义）。self_path 用于排除自身。
         """
         body: dict[str, Any] = {"name": name}
         if description:

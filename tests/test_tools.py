@@ -54,7 +54,7 @@ async def test_pack_read_path(bearer):
     fake = FakeClient(result={"name": "x"})
     mcp = await _mk(fake)
     async with Client(mcp) as c:
-        await c.call_tool("facet_pack_read", {"path": "packs/abc"})
+        await c.call_tool("facet_agent_read", {"path": "packs/abc"})
     assert fake.calls[0]["path"] == "/api/agents/packs/abc"
 
 
@@ -63,7 +63,7 @@ async def test_publish_thin_forward(bearer):
     fake = FakeClient(result={"path": "packs/new"})
     mcp = await _mk(fake)
     async with Client(mcp) as c:
-        out = await c.call_tool("facet_pack_publish", {"registration": reg})
+        out = await c.call_tool("facet_agent_publish", {"registration": reg})
     call = fake.calls[0]
     assert call["method"] == "POST" and call["path"] == "/api/agents/register"
     assert call["json_body"] == reg  # 载荷薄转发，不改写
@@ -73,7 +73,7 @@ async def test_toggle_explicit_write(bearer):
     fake = FakeClient(result={"ok": True})
     mcp = await _mk(fake)
     async with Client(mcp) as c:
-        await c.call_tool("facet_pack_toggle", {"path": "packs/abc", "enabled": False})
+        await c.call_tool("facet_agent_toggle", {"path": "packs/abc", "enabled": False})
     call = fake.calls[0]
     assert call["method"] == "POST"
     assert call["params"] == {"enabled": False}
@@ -84,7 +84,7 @@ async def test_duplicate_check_advisory_body(bearer):
     mcp = await _mk(fake)
     async with Client(mcp) as c:
         out = await c.call_tool(
-            "facet_duplicate_check", {"name": "n", "url": "https://u"}
+            "facet_agent_duplicate_check", {"name": "n", "url": "https://u"}
         )
     assert fake.calls[0]["json_body"] == {"name": "n", "url": "https://u"}
     assert out.data == {"collision_with": None, "advisory_matches": []}
