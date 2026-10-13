@@ -30,9 +30,9 @@
 
 ## 5. 第二片：按会话流状态（D4）
 
-- [ ] 5.1 `ctx.isStreaming`/`turnOrigin`/`turnBuffer` 全局态改按会话分键（Map + LRU 上界）。单测：两会话各自守卫独立
-- [ ] 5.2 prompt/steer 守卫、done/error 路由、broadcastSessions 按会话键取值。e2e：A 流中 B 可发可回（互不阻塞）
-- [ ] 5.3 回归：重连 resync、session-ownership、demo 配额在分键后全量 e2e 绿
+- [x] 5.1 `ctx.isStreaming`/`turnOrigin`/`turnBuffer` 全局态改按会话分键（Map + LRU 上界）。单测：两会话各自守卫独立
+- [x] 5.2 prompt/steer 守卫、done/error 路由、broadcastSessions 按会话键取值。e2e：A 流中 B 可发可回（互不阻塞）
+- [x] 5.3 回归：重连 resync、session-ownership、demo 配额在分键后全量 e2e 绿
 
 ## 6. dsh:contracts 活控制合同
 
@@ -41,4 +41,7 @@
 ## 7. 验证与发布
 
 - [x] 7.1 本地端到端冒烟：真 dsh 子进程 + web dev，五问题逐一手验（切模型即时、流中可切、开关默认关、脚注水位、无重复气泡、切会话即发）
-- [ ] 7.2 出片（模板+宿主+web 同滚）→ fd-prod 滚动 → 撤 `PACK_BASELINE_MCP` 中 websearch → 生产复验五点 + 观察错误率
+- [x] 7.2 出片（模板+宿主+web 同滚）→ fd-prod 滚动 → 撤 `PACK_BASELINE_MCP` 中 websearch → 生产复验五点 + 观察错误率
+  - sha-bd84e6f（快照=paas 377786c，platform-images 绕行线 6 分钟出片）生产 1/1 ready；GitOps 6bfbf3f 双动（镜像 tag + baseline 撤 websearch，各自独立可回滚）
+  - 生产已验：web bundle 四标记（websearch/ctxHint/promptInFlight/sending）；容器内 bridge/scope 模板含 platform/capabilities+sessionGatedMcp；baseline 环境变量已撤；websearch 仍装在 owner profile（installed 服务器）但经 guard 会话闸默认关
+  - 挂账：done-usage 真回合、流中活切真回合——LLM 上游（token.finddatatech.cloud）宕机中（pod llm-guard upstream_down 实证），恢复后补两探针
