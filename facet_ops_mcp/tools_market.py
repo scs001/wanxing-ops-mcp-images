@@ -17,13 +17,19 @@ from .client import RegistryClient, RegistryError
 
 
 def _current_bearer() -> str | None:
-    """进站 MCP 请求的 Bearer（无请求上下文/无头 → None）。"""
+    """进站 MCP 请求的 Bearer（无请求上下文/无头 → None）。
+
+    fastmcp 4.1.0 实测：get_http_headers() 过滤掉 Authorization（只剩 user-agent），
+    凭据头必须从 get_http_request().headers 原始头取。
+    """
     try:
-        from fastmcp.server.dependencies import get_http_headers
+        from fastmcp.server.dependencies import get_http_request
     except ImportError:  # 旧版 fastmcp
         return None
-    headers = get_http_headers() or {}
-    auth = (headers.get("Authorization") or headers.get("authorization") or "").strip()
+    req = get_http_request()
+    if req is None:
+        return None
+    auth = (req.headers.get("Authorization") or req.headers.get("authorization") or "").strip()
     if auth.lower().startswith("bearer "):
         return auth[7:].strip() or None
     return None
