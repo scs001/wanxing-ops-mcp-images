@@ -1,0 +1,172 @@
+# ── Platform single-container Deployment (cheap-cluster live layout) ──────────
+#
+# ⚠️ DRIFT WARNING (2026-09-18): the LIVE platform now runs in the `fd-prod`
+# namespace (Harbor image …:sha-<short>, env via envFrom → ConfigMap
+# `platform-config` + Secret `platform-secrets`). This `default`-namespace
+# manifest describes the earlier hostNetwork layout and is scaled to zero in
+# the cluster; it is kept as the documented single-container design. For
+# operating the LIVE deployment (incl. the registry market wiring) see
+# DEPLOY.md → "Registry market token (live layout: fd-prod namespace)".
+#
+# This manifest mirrors the LIVE deployment on the cheap k3s cluster (as of
+# 2026-09-07). Key differences from the earlier PVC/harbor design:
+#
+# - Runs in the `default` namespace, pinned to node cheap-5 via nodeName.
+# - hostNetwork: the pod listens on the node itself. PORT=3100 because cheap-5
+#   also runs a law-craw pod whose hostPort 3000 would otherwise DNAT-intercept
+#   every local connect to :3000 (including the platform's own self-checks).
+# - External entry: cheap-5 runs rrev-cheap1.service, a reverse SSH tunnel to
+#   cheap-1 (the public forward server), carrying 127.0.0.1:3100 → cheap-1's
+#   127.0.0.1:3000 and 127.0.0.1:32080 (sub2api NodePort) → cheap-1:32080.
+#   Caddy on cheap-1 routes craw.finddatatech.cloud → 127.0.0.1:3000 and
+#   token.finddatatech.cloud → 127.0.0.1:32080 (Safeline WAF fronts 80/443).
+# - LLM traffic goes to the sub2api gateway over the SAME tunnel
+#   (LLM_BASE_URL=http://127.0.0.1:32080). ClusterIP services are not
+#   reachable from a hostNetwork pod on cheap-5, so this loopback path is the
+#   deliberate design, not a workaround.
+# - Data lives on hostPath dirs (no PVC): /opt/platform → /data (SQLite +
+#   documents) and /opt/patch-dsh-home → /opt/dsh-home (dsh profile home).
+#
+# Image distribution (documented design — the LIVE manifest lives in the
+# fd-infra-deploy GitOps repo, see DEPLOY.md): the canonical pipeline is
+# GitHub Actions → Tencent TCR personal registry
+# (.github/workflows/image-tcr.yml → ccr.ccs.tencentyun.com/yizuo/platform),
+# pulled with node-level registries.yaml auth (no TCR imagePullSecret; the harbor-pull
+# pattern). The internal-Harbor path via Jenkins remains the fallback; both
+# pipelines tag images sha-<7> of the built revision, so the GitOps manifest
+# can reference either registry's tag interchangeably.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: platform
+  namespace: default
+  labels:
+    app: platform
+spec:
+  replicas: 1
+  strategy:
+    # Stateful singleton: kill the old pod before starting the new one so the
+    # hostPath data and the single agent session are never double-mounted.
+    type: Recreate
+  selector:
+    matchLabels:
+      app: platform
+  template:
+    metadata:
+      labels:
+        app: platform
+    spec:
+      # Pin to cheap-5: the data hostPath and the reverse tunnel live there.
+      nodeName: cheap-5
+      hostNetwork: true
+      # Let hostNetwork pods still resolve cluster-internal names.
+      dnsPolicy: ClusterFirstWithHostNet
+      # TCR pulls ride node-level registries.yaml auth (org rollout
+      # 2026-09-30) — no TCR imagePullSecret; harbor-finddata-pull below is
+      # the Harbor fallback channel's credential (see DEPLOY.md → Image
+      # pipeline).
+      imagePullSecrets:
+        - name: harbor-finddata-pull
+      containers:
+        - name: platform
+          # Canonical pipeline tag (GitHub Actions → TCR). Bump on every
+          # rebuild; the Jenkins → internal-Harbor fallback's sha-<7> tags are
+          # interchangeable here.
+          image: ccr.ccs.tencentyun.com/yizuo/platform:sha-0000000
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NODE_ENV
+              value: production
+            - name: HOST
+              value: "0.0.0.0"
+            # 3100, not 3000: cheap-5 hostPort 3000 is taken by law-craw and
+            # CNI DNAT-intercepts local connects (see header).
+            - name: PORT
+              value: "3100"
+            - name: PLATFORM_DATA_DIR
+              value: /data
+            # Writable workspace pin (fix-agent-workspace): produced files must
+            # land under the /api/files serving root. /data is a hostPath mount,
+            # so the node must pre-create /opt/platform/workspace with the image
+            # user's ownership (see DEPLOY.md → Agent workspace).
+            - name: AGENT_WORKSPACE
+              value: /data/workspace
+            # Task worker slots (worker-pool): fd-prod stays serial — the
+            # node's 4GB budget does not fit parallel dsh children yet.
+            - name: TASK_WORKER_MAX
+              value: "0"
+            # sub2api gateway through the reverse tunnel loopback.
+            - name: LLM_BASE_URL
+              value: http://127.0.0.1:32080
+            - name: DEFAULT_MODEL
+              value: deepseek-v4-flash-0731
+            # Create once:
+            #   kubectl -n default create secret generic platform-secrets \
+            #     --from-literal=llm-api-key=sk-...
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: platform-secrets
+                  key: llm-api-key
+                  optional: true
+            # Registry market source (registry-bridge): without REGISTRY_URL the
+            # bridge logs "registry source disabled" and the Store serves only
+            # the bundled catalog. The value also derives install endpoints
+            # ({REGISTRY_URL}/{path}/mcp), so keep it in sync with the registry.
+            - name: REGISTRY_URL
+              value: https://mcp.finddatatech.cloud
+            # Create / update once (admin-issued token from the registry UI):
+            #   kubectl -n default patch secret platform-secrets \
+            #     -p '{"stringData":{"market-registry-token":"<token>"}}'
+            # Optional: without the key the pod still boots and the bridge
+            # degrades to last-good (empty) — Store keeps bundled entries only.
+            - name: MARKET_REGISTRY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: platform-secrets
+                  key: market-registry-token
+                  optional: true
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: dshhome
+              mountPath: /opt/dsh-home
+            # Hot-fix overlay for the image's /opt/dsh tree: the shipped image
+            # was built with legacy-peer-deps, which skipped 19 transitive peer
+            # packages the dsh runtime needs at boot (ERR_MODULE_NOT_FOUND on
+            # @deepseek-ai/dsh-sandbox first). /opt/dsh-fixed/dsh on cheap-5 is
+            # a complete linux-native install (npmmirror, same pins as the
+            # Dockerfile). Drop this mount once an image built with the fixed
+            # Dockerfile (explicit package list) is deployed.
+            - name: dshroot
+              mountPath: /opt/dsh
+          # startupProbe gates liveness until server.js + the dsh agent finish
+          # cold start. Liveness is deliberately lax (the supervisor restarts
+          # children internally; k8s should only intervene on true hangs).
+          startupProbe:
+            httpGet:
+              path: /api/config
+              port: 3100
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 40
+          livenessProbe:
+            httpGet:
+              path: /api/config
+              port: 3100
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 100
+      volumes:
+        - name: data
+          hostPath:
+            path: /opt/platform
+            type: Directory
+        - name: dshhome
+          hostPath:
+            path: /opt/patch-dsh-home
+            type: Directory
+        - name: dshroot
+          hostPath:
+            path: /opt/dsh-fixed/dsh
+            type: Directory
