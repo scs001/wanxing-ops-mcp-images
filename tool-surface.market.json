@@ -1,0 +1,30 @@
+{
+  "schema": "mcp-tool-surface/v1",
+  "server": "facet-market-mcp",
+  "entry_path": "/facet-market-mcp",
+  "product_line": "facet",
+  "hosting": ["shared-instance"],
+  "description": "谦面（facet 线）市场操作 MCP：浏览 pack 目录、读详情/版本、发布新 pack/新版本、切可见性、策展分类。逐调用以用户市场凭据（设备配对铸造的 app token）委托执行，发布需 creators 组。",
+  "skills_eligible_for_packs": [
+    "facet-market-ops",
+    "facet-pack-authoring"
+  ],
+  "tool_groups": [
+    {
+      "group": "marketplane",
+      "level": "commercial",
+      "tools": [
+        "facet_market_pack_browse",
+        "facet_market_pack_read",
+        "facet_market_pack_versions",
+        "facet_market_pack_publish",
+        "facet_market_pack_visibility",
+        "facet_market_pack_curation"
+      ],
+      "data_sources": [
+        "facet 市场 /api/packs*（facet.finddatatech.cloud packs.db）"
+      ],
+      "notes": "写操作（publish/visibility/curation）以调用方用户身份执行：publish 需 creators 组、仅作者可发新版本、featured 仅管理员；401 语义透传供壹座凭据轨道翻面。凭据=壹座 facet-market ref（Ed25519 设备密钥+静默挑战续登，C1.1-B）。"
+    }
+  ]
+}

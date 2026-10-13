@@ -1,7 +1,13 @@
-# facet-ops-mcp — 谦面市场操作 MCP
+# facet-ops-mcp — 谦面操作 MCP（双面）
 
-谦面（facet 线）的动作 MCP（五线 AI 操作面 C1 切片）：把 registry console API 的
-pack 操作面暴露给 AI agent——**浏览网关 AgentCard 目录、读详情、登记、更新、启停、登记前查重**（registry 网关面；facet pack 市场发布面 `/api/packs` 为 C1.1 挂账，需 facet 凭据 ref）。
+同一镜像两个 deployment（`FACET_OPS_FACE` 切脸）：
+
+| 脸 | 服务 | 上游面 | 凭据（壹座 ref） |
+|---|---|---|---|
+| registry（默认） | facet-ops-mcp（:31892） | registry 网关 AgentCard `/api/agents*` | `registry`（既有） |
+| market | facet-market-mcp（:31893） | facet 市场 `/api/packs*` | `facet-market`（C1.1-B：Ed25519 设备密钥+静默挑战续登） |
+
+五线 AI 操作面 C1/C1.1 切片：registry 面=AgentCard 目录操作；market 面=**发布 pack 到谦面市场**（头牌）+浏览/版本/可见性/策展。
 
 - 契约：`openspec/changes/facet-ops-mcp/specs/facet-ops-mcp/spec.md`（finddata 工作区）
 - 接入规约：`LINES-MCP-CONFORMANCE.md`（五线对齐清单）
@@ -29,7 +35,9 @@ registry 不可达 → 放行（工具层诚实报 unreachable）。
 
 | 变量 | 默认 | 说明 |
 |---|---|---|
-| `FACET_OPS_REGISTRY_BASE_URL` | `https://mcp.finddatatech.cloud` | registry console API 基址 |
+| `FACET_OPS_FACE` | `registry` | `registry` \| `market` 切脸 |
+| `FACET_OPS_REGISTRY_BASE_URL` | `https://mcp.finddatatech.cloud` | registry 网关基址 |
+| `FACET_OPS_MARKET_BASE_URL` | `https://facet.finddatatech.cloud` | facet 市场基址 |
 | `FACET_OPS_TIMEOUT_SECONDS` | `15` | 上游超时 |
 | `FACET_OPS_AUTH_CACHE_TTL` | `60` | 鉴权门校验缓存 TTL（秒） |
 
@@ -38,6 +46,6 @@ registry 不可达 → 放行（工具层诚实报 unreachable）。
 ```bash
 pip install -e ".[dev]"
 pytest                                # 测试
-python3 scripts/selfcheck_surface.py  # 上牌 selfcheck（manifest↔运行时一致）
+python3 scripts/selfcheck_surface.py  # 双面上牌 selfcheck（12 工具）
 facet-ops-mcp serve --port 8000       # /health 无门；/mcp 带鉴权门
 ```
