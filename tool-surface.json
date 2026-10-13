@@ -1,0 +1,30 @@
+{
+  "schema": "mcp-tool-surface/v1",
+  "server": "facet-ops-mcp",
+  "entry_path": "/facet-ops-mcp",
+  "product_line": "facet",
+  "hosting": ["shared-instance"],
+  "description": "谦面（facet 线）市场操作 MCP：浏览 pack 目录、读详情、发布/更新/上下架、发布前查重。逐调用以用户 registry 凭据委托执行，可见域与写权限由 registry 判定。",
+  "skills_eligible_for_packs": [
+    "facet-pack-authoring",
+    "facet-market-ops"
+  ],
+  "tool_groups": [
+    {
+      "group": "market",
+      "level": "commercial",
+      "tools": [
+        "facet_catalog_browse",
+        "facet_pack_read",
+        "facet_pack_publish",
+        "facet_pack_update",
+        "facet_pack_toggle",
+        "facet_duplicate_check"
+      ],
+      "data_sources": [
+        "registry console API /api/agents*（谦面市场条目与目录）"
+      ],
+      "notes": "写操作（publish/update/toggle）以调用方用户身份执行，权限由 registry ui_permissions 判定；401 语义透传供壹座凭据轨道翻面。"
+    }
+  ]
+}
