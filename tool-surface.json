@@ -1,32 +1,38 @@
 {
   "schema": "mcp-tool-surface/v1",
-  "server": "facet-ops-mcp",
-  "entry_path": "/facet-ops-mcp",
-  "product_line": "facet",
-  "hosting": [
-    "shared-instance"
-  ],
-  "description": "谦面（facet 线）网关操作 MCP：浏览网关 AgentCard 目录、读详情、登记/更新/启停、登记前查重。逐调用以用户 registry 凭据委托执行。",
+  "server": "wanxing-ops-mcp",
+  "entry_path": "/wanxing-ops-mcp",
+  "product_line": "wanxing",
+  "hosting": ["shared-instance"],
+  "description": "萬星（wanxing 线）舰队操作 MCP：公开目录/AgentCard、部署者允许清单与启停（平台令牌，用户委托）、A2A 回合（caller key，计费门）。双凭据分型，回执不冒充结果。",
   "skills_eligible_for_packs": [
-    "facet-market-ops",
-    "facet-agent-ops"
+    "wanxing-fleet-ops"
   ],
   "tool_groups": [
     {
-      "group": "market",
+      "group": "fleet",
       "level": "commercial",
       "tools": [
-        "facet_agent_publish",
-        "facet_agent_update",
-        "facet_agent_toggle",
-        "facet_agent_read",
-        "facet_catalog_browse",
-        "facet_agent_duplicate_check"
+        "wanxing_agents_browse",
+        "wanxing_agent_card",
+        "wanxing_callers_list",
+        "wanxing_callers_add",
+        "wanxing_callers_remove",
+        "wanxing_agent_pause",
+        "wanxing_agent_resume"
       ],
       "data_sources": [
-        "registry console API /api/agents*（谦面市场条目与目录）"
+        "壹座萬星对客面 /api/wanxing/v1/* 与 /api/packs/*/deployments/*"
       ],
-      "notes": "写操作（publish/update/toggle）以调用方用户身份执行，权限由 registry 判定；401 语义透传供壹座凭据轨道翻面。口径：本面包 registry 网关 AgentCard 面（/api/agents*）；facet pack 市场发布面（/api/packs）为 C1.1 挂账。"
+      "notes": "管理面以调用方平台令牌执行（packAuth/resolveUser 判定）；写操作显式命名；401/403/404/409/423/429 如实透传。"
+    },
+    {
+      "group": "turns",
+      "level": "internal",
+      "tools": [
+        "wanxing_agent_turn"
+      ],
+      "notes": "计费动作（caller key 边界结算）不进 pack 商业面——消费走用户自己的 caller key，包装成本面会引入代计费。promote_when：出现可信的按用户分账场景再评。"
     }
   ]
 }

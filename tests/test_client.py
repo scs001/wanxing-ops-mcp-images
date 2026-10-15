@@ -1,71 +1,60 @@
-"""client.py 契约测试：Bearer 转发 + 错误映射（mock transport）。"""
+"""client 契约测试：Bearer 转发 + 萬星特有错误映射（402/409/423/429）。"""
 
 from __future__ import annotations
 
 import httpx
 import pytest
 
-from facet_ops_mcp.client import MISSING_CREDENTIAL_HINT, RegistryClient, RegistryError
+from wanxing_ops_mcp.client import MISSING_CREDENTIAL_HINT, RegistryClient, RegistryError
 
 
 def make_client(handler) -> RegistryClient:
-    transport = httpx.MockTransport(handler)
-    return RegistryClient("https://reg.example", timeout_seconds=5, transport=transport)
+    return RegistryClient("https://wanxing.example", timeout_seconds=5,
+                          transport=httpx.MockTransport(handler))
 
 
-async def test_bearer_forwarded_verbatim():
+async def test_bearer_forwarded_and_idempotency_header():
     seen = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen["auth"] = request.headers.get("Authorization")
-        seen["path"] = request.url.path
-        seen["params"] = dict(request.url.params)
-        return httpx.Response(200, json={"agents": []})
+        seen["idem"] = request.headers.get("Idempotency-Key")
+        return httpx.Response(200, json={"ok": True})
 
     client = make_client(handler)
-    result = await client.request(
-        "GET", "/api/agents", bearer="tok-abc", params={"limit": 1}
-    )
-    assert seen["auth"] == "Bearer tok-abc"
-    assert seen["path"] == "/api/agents"
-    assert seen["params"]["limit"] == "1"
-    assert result == {"agents": []}
+    await client.request("POST", "/api/wanxing/v1/a2a/x", bearer="sk-tok",
+                         json_body={}, headers={"Idempotency-Key": "abc"})
+    assert seen["auth"] == "Bearer sk-tok"
+    assert seen["idem"] == "abc"
 
 
 async def test_missing_credential_never_touches_upstream():
-    def handler(request):  # pragma: no cover - 到这里即失败
+    def handler(request):
         raise AssertionError("无凭据不应触上游")
 
     client = make_client(handler)
     with pytest.raises(RegistryError) as ei:
-        await client.request("GET", "/api/agents", bearer=None)
+        await client.request("GET", "/x", bearer=None)
     assert ei.value.kind == "missing_credential"
-    assert ei.value.status == 401
     assert MISSING_CREDENTIAL_HINT in ei.value.detail
 
 
 @pytest.mark.parametrize(
     "status,kind",
-    [
-        (401, "unauthorized"),
-        (403, "forbidden"),
-        (404, "not_found"),
-        (409, "conflict"),
-        (422, "invalid"),
-        (500, "unreachable"),
-        (503, "unreachable"),
-    ],
+    [(401, "unauthorized"), (402, "billing"), (403, "forbidden"), (404, "not_found"),
+     (409, "conflict"), (422, "invalid"), (423, "paused"), (429, "rate_limited"),
+     (500, "unreachable"), (503, "unreachable")],
 )
 async def test_status_mapping(status, kind):
     def handler(request):
-        return httpx.Response(status, json={"detail": f"boom {status}"})
+        return httpx.Response(status, json={"error": f"boom {status}"})
 
     client = make_client(handler)
     with pytest.raises(RegistryError) as ei:
-        await client.request("GET", "/api/agents", bearer="tok")
+        await client.request("GET", "/x", bearer="tok")
     assert ei.value.kind == kind
     assert ei.value.status == status
-    assert f"boom {status}" in ei.value.detail  # detail 原文透传
+    assert f"boom {status}" in ei.value.detail
 
 
 async def test_transport_error_is_unreachable():
@@ -74,7 +63,6 @@ async def test_transport_error_is_unreachable():
 
     client = make_client(handler)
     with pytest.raises(RegistryError) as ei:
-        await client.request("GET", "/api/agents", bearer="tok")
+        await client.request("GET", "/x", bearer="tok")
     assert ei.value.kind == "unreachable"
-    assert ei.value.status is None
     assert "不可达" in ei.value.detail

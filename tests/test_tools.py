@@ -1,12 +1,12 @@
-"""六工具接线测试：方法/路径/参数/载荷薄转发 + 错误透传（fake client + 内存 Client）。"""
+"""八工具接线测试：薄转发+分型语义（fake client）。"""
 
 from __future__ import annotations
 
 import pytest
 from fastmcp import Client, FastMCP
 
-import facet_ops_mcp.tools_market as tm
-from facet_ops_mcp.client import RegistryError
+import wanxing_ops_mcp.tools_fleet as tf
+from wanxing_ops_mcp.client import RegistryError
 
 
 class FakeClient:
@@ -15,11 +15,9 @@ class FakeClient:
         self.result = result
         self.error = error
 
-    async def request(self, method, path, *, bearer, params=None, json_body=None):
-        self.calls.append(
-            {"method": method, "path": path, "bearer": bearer,
-             "params": params, "json_body": json_body}
-        )
+    async def request(self, method, path, *, bearer, params=None, json_body=None, headers=None):
+        self.calls.append({"method": method, "path": path, "bearer": bearer,
+                           "params": params, "json_body": json_body, "headers": headers})
         if self.error:
             raise self.error
         return self.result
@@ -27,73 +25,96 @@ class FakeClient:
 
 @pytest.fixture
 def bearer(monkeypatch):
-    monkeypatch.setattr(tm, "_current_bearer", lambda: "user-token")
-    return "user-token"
+    monkeypatch.setattr(tf, "_current_bearer", lambda: "tok-abc")
+    return "tok-abc"
 
 
 async def _mk(fake):
-    mcp = FastMCP("t")
-    tm.register(mcp, fake)
+    mcp = FastMCP("t-wx")
+    tf.register(mcp, fake)
     return mcp
 
 
-async def test_catalog_browse_forwards_pagination(bearer):
-    fake = FakeClient(result=[])
+async def test_browse_public_read_paginates(bearer):
+    fake = FakeClient(result={"agents": []})
     mcp = await _mk(fake)
     async with Client(mcp) as c:
-        result = await c.call_tool(
-            "facet_catalog_browse", {"query": "法律", "limit": 5, "offset": 10}
-        )
+        await c.call_tool("wanxing_agents_browse", {"page": 2, "page_size": 10})
     call = fake.calls[0]
-    assert call["method"] == "GET" and call["path"] == "/api/agents"
-    assert call["bearer"] == "user-token"
-    assert call["params"] == {"limit": 5, "offset": 10, "query": "法律"}
+    assert call["path"] == "/api/wanxing/v1/agents"
+    assert call["params"] == {"page": 2, "page_size": 10}
 
 
-async def test_pack_read_path(bearer):
-    fake = FakeClient(result={"name": "x"})
+async def test_card_path(bearer):
+    fake = FakeClient(result={"name": "heal"})
     mcp = await _mk(fake)
     async with Client(mcp) as c:
-        await c.call_tool("facet_agent_read", {"path": "packs/abc"})
-    assert fake.calls[0]["path"] == "/api/agents/packs/abc"
+        await c.call_tool("wanxing_agent_card", {"agent_slug": "packs-x-heal"})
+    assert fake.calls[0]["path"] == "/api/wanxing/v1/a2a/packs-x-heal/.well-known/agent-card.json"
 
 
-async def test_publish_thin_forward(bearer):
-    reg = {"name": "市场助手", "url": "https://x", "supportedProtocol": "mcp"}
-    fake = FakeClient(result={"path": "packs/new"})
-    mcp = await _mk(fake)
-    async with Client(mcp) as c:
-        out = await c.call_tool("facet_agent_publish", {"registration": reg})
-    call = fake.calls[0]
-    assert call["method"] == "POST" and call["path"] == "/api/agents/register"
-    assert call["json_body"] == reg  # 载荷薄转发，不改写
-
-
-async def test_toggle_explicit_write(bearer):
+async def test_callers_add_thin_forward(bearer):
     fake = FakeClient(result={"ok": True})
     mcp = await _mk(fake)
     async with Client(mcp) as c:
-        await c.call_tool("facet_agent_toggle", {"path": "packs/abc", "enabled": False})
+        await c.call_tool("wanxing_callers_add",
+                          {"pack_id": "p1", "agent_id": "a1", "email": "x@y.z"})
     call = fake.calls[0]
     assert call["method"] == "POST"
-    assert call["params"] == {"enabled": False}
+    assert call["path"] == "/api/packs/p1/deployments/a1/callers"
+    assert call["json_body"] == {"email": "x@y.z"}
 
 
-async def test_duplicate_check_advisory_body(bearer):
-    fake = FakeClient(result={"collision_with": None, "advisory_matches": []})
+async def test_pause_resume_explicit_writes(bearer):
+    fake = FakeClient(result={"ok": True})
     mcp = await _mk(fake)
     async with Client(mcp) as c:
-        out = await c.call_tool(
-            "facet_agent_duplicate_check", {"name": "n", "url": "https://u"}
-        )
-    assert fake.calls[0]["json_body"] == {"name": "n", "url": "https://u"}
-    assert out.data == {"collision_with": None, "advisory_matches": []}
+        await c.call_tool("wanxing_agent_pause", {"pack_id": "p", "agent_id": "a"})
+        await c.call_tool("wanxing_agent_resume", {"pack_id": "p", "agent_id": "a"})
+    assert fake.calls[0]["path"].endswith("/pause")
+    assert fake.calls[1]["path"].endswith("/resume")
 
 
-async def test_registry_401_propagates_as_tool_error(bearer):
-    fake = FakeClient(error=RegistryError("unauthorized", 401, "expired"))
+async def test_turn_builds_a2a_message_and_receipt_note(bearer):
+    fake = FakeClient(result={"jsonrpc": "2.0", "id": 1, "result": {"kind": "queued"}})
+    mcp = await _mk(fake)
+    async with Client(mcp) as c:
+        out = await c.call_tool("wanxing_agent_turn",
+                                {"agent_slug": "s1", "text": "SUBMIT x", "idempotency_key": "k1"})
+    call = fake.calls[0]
+    assert call["path"] == "/api/wanxing/v1/a2a/s1"
+    assert call["json_body"]["method"] == "message/send"
+    assert call["json_body"]["params"]["message"]["parts"][0]["text"] == "SUBMIT x"
+    assert call["headers"]["Idempotency-Key"] == "k1"
+    data = out.data if hasattr(out, "data") else out
+    assert data["idempotencyKey"] == "k1"
+    assert "回执" in data["note"]
+
+
+async def test_turn_generates_uuid_key_when_absent(bearer):
+    fake = FakeClient(result={})
+    mcp = await _mk(fake)
+    async with Client(mcp) as c:
+        out = await c.call_tool("wanxing_agent_turn", {"agent_slug": "s1", "text": "hi"})
+    call = fake.calls[0]
+    assert call["headers"]["Idempotency-Key"].startswith("wanxing-ops-mcp-")
+
+
+async def test_turn_requires_credential(monkeypatch):
+    monkeypatch.setattr(tf, "_current_bearer", lambda: None)
+    fake = FakeClient()
     mcp = await _mk(fake)
     async with Client(mcp) as c:
         with pytest.raises(Exception) as ei:
-            await c.call_tool("facet_catalog_browse", {})
-    assert "expired" in str(ei.value)  # detail 原文可透出给翻面链路
+            await c.call_tool("wanxing_agent_turn", {"agent_slug": "s", "text": "x"})
+    assert "caller key" in str(ei.value)
+    assert fake.calls == []  # 未触上游
+
+
+async def test_billing_402_propagates(bearer):
+    fake = FakeClient(error=RegistryError("billing", 402, "INSUFFICIENT_BALANCE"))
+    mcp = await _mk(fake)
+    async with Client(mcp) as c:
+        with pytest.raises(Exception) as ei:
+            await c.call_tool("wanxing_agents_browse", {})
+    assert "INSUFFICIENT_BALANCE" in str(ei.value)
