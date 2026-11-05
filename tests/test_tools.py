@@ -58,10 +58,10 @@ async def test_callers_add_thin_forward(bearer):
     mcp = await _mk(fake)
     async with Client(mcp) as c:
         await c.call_tool("wanxing_callers_add",
-                          {"pack_id": "p1", "agent_id": "a1", "email": "x@y.z"})
+                          {"agent_slug": "packs-p1-a1", "email": "x@y.z"})
     call = fake.calls[0]
     assert call["method"] == "POST"
-    assert call["path"] == "/api/packs/p1/deployments/a1/callers"
+    assert call["path"] == "/api/wanxing/v1/console/deployments/packs-p1-a1/callers"
     assert call["json_body"] == {"email": "x@y.z"}
 
 
@@ -69,8 +69,8 @@ async def test_pause_resume_explicit_writes(bearer):
     fake = FakeClient(result={"ok": True})
     mcp = await _mk(fake)
     async with Client(mcp) as c:
-        await c.call_tool("wanxing_agent_pause", {"pack_id": "p", "agent_id": "a"})
-        await c.call_tool("wanxing_agent_resume", {"pack_id": "p", "agent_id": "a"})
+        await c.call_tool("wanxing_agent_pause", {"agent_slug": "packs-p-a"})
+        await c.call_tool("wanxing_agent_resume", {"agent_slug": "packs-p-a"})
     assert fake.calls[0]["path"].endswith("/pause")
     assert fake.calls[1]["path"].endswith("/resume")
 

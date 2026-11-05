@@ -8,7 +8,9 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Settings:
-    base_url: str = "https://platform.finddatatech.cloud"
+    # 萬星独立面（unify-wanxing-a2a-face 3.x 迁址）：管理半边自 paas 网关摘挂后，
+    # console 编址路由只存在于萬星 facade——base URL 指向 wanxing 域。
+    base_url: str = "https://wanxing.finddatatech.cloud"
     timeout_seconds: float = 15.0
     auth_cache_ttl_seconds: float = 60.0
 

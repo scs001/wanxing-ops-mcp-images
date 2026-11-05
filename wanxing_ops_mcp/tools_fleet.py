@@ -66,59 +66,61 @@ def register(mcp: FastMCP, client: RegistryClient) -> None:
         )
 
     @mcp.tool
-    async def wanxing_callers_list(pack_id: str, agent_id: str) -> Any:
-        """读部署的 caller 允许清单（GET /api/packs/{packId}/deployments/{agentId}/callers）。
+    async def wanxing_callers_list(agent_slug: str) -> Any:
+        """读部署的 caller 允许清单（GET /api/wanxing/v1/console/deployments/{slug}/callers）。
 
-        管理面：以你的平台令牌执行，仅部署者/创作者（403 如实透传）。
+        管理面：unify-wanxing-a2a-face 3.1 迁址——slug 编址打萬星 facade console 面
+        （原 packId/agentId 编址的 paas 网关路由已随摘挂退役）。凭据=萬星 console
+        服务令牌（部署者/ops；ownerGate 校验归属，403 如实透传）。
         """
         return await client.request(
             "GET",
-            f"/api/packs/{pack_id}/deployments/{agent_id}/callers",
+            f"/api/wanxing/v1/console/deployments/{agent_slug}/callers",
             bearer=_current_bearer(),
         )
 
     @mcp.tool
-    async def wanxing_callers_add(pack_id: str, agent_id: str, email: str) -> dict[str, Any]:
-        """加 caller 进允许清单（POST 同上，body {email}）——显式写操作。
+    async def wanxing_callers_add(agent_slug: str, email: str) -> dict[str, Any]:
+        """加 caller 进允许清单（POST console/deployments/{slug}/callers，body {email}）——显式写操作。
 
         email 必须已有计费账号：404 NO_SUB2API_ACCOUNT = 该邮箱还没在计费面板
-        登录过（如实转述并指路 token.finddatatech.cloud）。仅部署者/创作者。
+        登录过（如实转述并指路 token.finddatatech.cloud）。凭据=萬星 console 服务令牌。
         """
         result = await client.request(
             "POST",
-            f"/api/packs/{pack_id}/deployments/{agent_id}/callers",
+            f"/api/wanxing/v1/console/deployments/{agent_slug}/callers",
             bearer=_current_bearer(),
             json_body={"email": email},
         )
         return {"added": True, "result": result}
 
     @mcp.tool
-    async def wanxing_callers_remove(pack_id: str, agent_id: str, user_id: int) -> dict[str, Any]:
-        """从允许清单移除 caller（DELETE 同上，body/query userId）——显式写操作。"""
+    async def wanxing_callers_remove(agent_slug: str, user_id: int) -> dict[str, Any]:
+        """从允许清单移除 caller（DELETE console/deployments/{slug}/callers，body userId）——显式写操作。"""
         result = await client.request(
             "DELETE",
-            f"/api/packs/{pack_id}/deployments/{agent_id}/callers",
+            f"/api/wanxing/v1/console/deployments/{agent_slug}/callers",
             bearer=_current_bearer(),
             json_body={"userId": user_id},
         )
         return {"removed": True, "result": result}
 
     @mcp.tool
-    async def wanxing_agent_pause(pack_id: str, agent_id: str) -> dict[str, Any]:
-        """暂停部署的 agent（POST .../pause）——显式写操作，仅部署者/创作者。"""
+    async def wanxing_agent_pause(agent_slug: str) -> dict[str, Any]:
+        """暂停部署的 agent（POST console/deployments/{slug}/pause）——显式写操作。"""
         result = await client.request(
             "POST",
-            f"/api/packs/{pack_id}/deployments/{agent_id}/pause",
+            f"/api/wanxing/v1/console/deployments/{agent_slug}/pause",
             bearer=_current_bearer(),
         )
         return {"paused": True, "result": result}
 
     @mcp.tool
-    async def wanxing_agent_resume(pack_id: str, agent_id: str) -> dict[str, Any]:
-        """恢复暂停的 agent（POST .../resume）——显式写操作，仅部署者/创作者。"""
+    async def wanxing_agent_resume(agent_slug: str) -> dict[str, Any]:
+        """恢复暂停的 agent（POST console/deployments/{slug}/resume）——显式写操作。"""
         result = await client.request(
             "POST",
-            f"/api/packs/{pack_id}/deployments/{agent_id}/resume",
+            f"/api/wanxing/v1/console/deployments/{agent_slug}/resume",
             bearer=_current_bearer(),
         )
         return {"resumed": True, "result": result}
@@ -155,3 +157,16 @@ def register(mcp: FastMCP, client: RegistryClient) -> None:
             headers={"Idempotency-Key": key, "Content-Type": "application/json"},
         )
         return {"receipt": result, "idempotencyKey": key, "note": TURN_RECEIPT_NOTE}
+
+    @mcp.tool
+    async def wanxing_fleet_board() -> Any:
+        """机群观测 board 只读面（GET /api/fleet/v1/board）——萬星 fleet-observer。
+
+        观测运维 MVP：五态分布/驻留水位/唤醒延迟/退温驱逐/budget kill/摄取滞后/
+        结算 pending 一屏。凭据=observer 服务凭据（wanxing-fleet secret）。只读。
+        """
+        return await client.request(
+            "GET",
+            "/api/fleet/v1/board",
+            bearer=_current_bearer(),
+        )
