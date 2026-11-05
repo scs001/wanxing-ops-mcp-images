@@ -22,17 +22,24 @@ TURN_RECEIPT_NOTE = (
 
 
 def _current_bearer() -> str | None:
+    # 管理面凭据优先级（unify-wanxing-a2a-face 3.3）：进站头委托的 bearer 先
+    # （调用方自带平台令牌/调用键），缺省回落服务凭据 WANXING_OPS_TOKEN
+    # （wanxing-fleet secret ingest_token，与 facade ownerGate token 路径同源）
+    # ——无人委托时管理工具仍可执行（ops 服务身份），对话型 turn 永不回落
+    # （计费门必须 caller key）。
     try:
         from fastmcp.server.dependencies import get_http_request
     except ImportError:
-        return None
-    req = get_http_request()
-    if req is None:
-        return None
-    auth = (req.headers.get("Authorization") or req.headers.get("authorization") or "").strip()
-    if auth.lower().startswith("bearer "):
-        return auth[7:].strip() or None
-    return None
+        req = None
+    else:
+        req = get_http_request()
+    if req is not None:
+        auth = (req.headers.get("Authorization") or req.headers.get("authorization") or "").strip()
+        if auth.lower().startswith("bearer "):
+            return auth[7:].strip() or None
+    import os
+    env_tok = os.environ.get("WANXING_OPS_TOKEN") or ""
+    return env_tok or None
 
 
 def register(mcp: FastMCP, client: RegistryClient) -> None:
